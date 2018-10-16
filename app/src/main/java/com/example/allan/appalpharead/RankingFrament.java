@@ -22,6 +22,8 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -31,8 +33,10 @@ import retrofit2.converter.gson.GsonConverterFactory;
 
 public class RankingFrament extends Fragment {
     private EditText word;
-    private TextView response;
+    private TextView boxResponse;
     private Button btn;
+
+    private static final Pattern REMOVE_TAGS = Pattern.compile("<.+?>");
 
     private static String TAG = "suemar";
 
@@ -43,80 +47,51 @@ public class RankingFrament extends Fragment {
         View view = inflater.inflate(R.layout.fragment_ranking, container, false);
 
         word = view.findViewById(R.id.TextT);
-        response = view.findViewById(R.id.TextRT);
+        boxResponse = view.findViewById(R.id.TextRT);
         btn = view.findViewById(R.id.btnTest);
 
-        Retrofit retrofit = new Retrofit.Builder()
-                .baseUrl(DicionarioService.BASE_URL) //define a url base
-                .addConverterFactory(GsonConverterFactory.create()) //define o objeto de converção (Gson)
-                .build();
-
-        //retrofit retorna uma classe que implementa DicionarioService(pois este é uma interface e não pode ser instânciada)
-        DicionarioService service = retrofit.create(DicionarioService.class);
-
-        //objeto para fazer a chamada
-        Call<DicionarioOnline> requestDicionario = service.searchWord();
-
-        requestDicionario.enqueue(new Callback<DicionarioOnline>() {
-            @Override
-            public void onResponse(Call<DicionarioOnline> call, Response<DicionarioOnline> response) {
-                if(!response.isSuccessful()) Log.i(TAG, "Erro1: " + response.code());
-                else{
-                    //Requisição retornou co sucesso
-                    DicionarioOnline dicionario = response.body();
-
-                    Entry e = dicionario.entry;
-                    for(Sense s: e.sense)  Log.i(TAG, String.format("%s %s", s.def, s.gramGrp));
-                }
-            }
-
-            @Override
-            public void onFailure(Call<DicionarioOnline> call, Throwable t) {
-                Log.e(TAG, "Erro2: " + t.getMessage());
-            }
-        });
-
-        /*
         btn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                response.setText(word.getText().toString());
-            }});
+        @Override
+        public void onClick(View view) {
+            Retrofit retrofit = new Retrofit.Builder()
+                    .baseUrl("http://dicionario-aberto.net/") //define a url base
+                    .addConverterFactory(GsonConverterFactory.create()) //define o objeto de converção (Gson)
+                    .build();
 
-         btn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                try {
-                    String resposta = getDict(word.getText().toString());
-                    response.setText(resposta);
-                } catch (IOException e) {
-                    response.setText("Deu ruim!");
-                    e.printStackTrace();
-                }
-            }
+            //retrofit retorna uma classe que implementa DicionarioService(pois este é uma interface e não pode ser instânciada)
+            DicionarioService service = retrofit.create(DicionarioService.class);
 
-            private String getDict(String word) throws IOException {
-                String link = "http://dicionario-aberto.net/search-json/" + word;
-                URL url = new URL(link);
-                HttpURLConnection con = (HttpURLConnection) url.openConnection();
-                con.setRequestMethod("GET");
-                StringBuilder content;
+            //objeto para fazer a chamada
+            Call<DicionarioOnline> requestDicionario = service.searchWord("search-json/"+word.getText().toString());
 
-                try (BufferedReader in = new BufferedReader(
-                        new InputStreamReader(con.getInputStream()))) {
-                    String line;
-                    content = new StringBuilder();
-                    while ((line = in.readLine()) != null) {
-                        content.append(line);
-                        content.append(System.lineSeparator());
+            requestDicionario.enqueue(new Callback<DicionarioOnline>() {
+                @Override
+                public void onResponse(Call<DicionarioOnline> call, Response<DicionarioOnline> response) {
+                    if(!response.isSuccessful()) {
+                        Log.i(TAG, "Erro1: " + response.code());
+                        boxResponse.setText("Desculpe, essa palavra não foi encontrada, tente outra.");
+                    }else{
+                        //Requisição retornou co sucesso
+                        DicionarioOnline dicionario = response.body();
+                        String ans = "";
+                        Entry e = dicionario.entry;
+                        for(Sense s: e.sense) {
+                            Matcher m = REMOVE_TAGS.matcher(s.def);
+                            ans = ans.concat("-->>").concat(m.replaceAll("\n")).concat("\n\n");
+                            Log.i(TAG, String.format("%s %s", s.def, s.gramGrp));
+                        }
+                        boxResponse.setText(ans);
                     }
-                    System.out.println(content.toString());
-                } finally {
-                    con.disconnect();
                 }
-                return content.toString();
-            }
-        });*/
+
+                @Override
+                public void onFailure(Call<DicionarioOnline> call, Throwable t) {
+                    Log.e(TAG, "Erro2: " + t.getMessage());
+                    boxResponse.setText("Desculpe, essa palavra não foi encontrada, tente outra.");
+                }
+            });
+        }
+        });
         return view;
     }
 }
